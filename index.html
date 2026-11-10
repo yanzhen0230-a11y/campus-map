@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校園手繪地圖導覽</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #1e1e1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 全螢幕/大圖地圖容器 */
+        .map-wrapper {
+            position: relative;
+            width: 100vw;
+            max-width: 1000px;
+            aspect-ratio: 4 / 3;
+            margin: auto;
+            box-shadow: 0 10px 30px rgba(5, 5, 5, 0.778);
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: rgb(247, 240, 212);
+        }
+
+        /* 背景地圖圖片 */
+        .map-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* 地圖點擊熱點 (Hotspots) */
+        .hotspot {
+            position: absolute;
+            background-color: rgba(250, 250, 251, 0);
+            border: 2px dashed #ffffff00;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #003366;
+            font-weight: bold;
+            font-size: 0.85rem;
+            text-shadow: 0 0 3px #ffffff8d;
+        }
+
+        .hotspot:hover {
+            background-color: rgba(246, 248, 249, 0.364);
+            border-style: solid;
+            transform: scale(1.03);
+        }
+
+        /* 各建築物位置與大小設定 */
+        #spot-zonghe { top: 24%; left: 18%; width: 27%; height: 17%; }
+        #spot-science { top: 44%; left: 18%; width: 19%; height: 10%; }
+        #spot-pond    { top: 54%; left: 15%; width: 11%;  height: 6%; }
+        #spot-ziyuan  { top: 60%; left: 10%; width: 25%; height: 14%; }
+        #spot-zhengyi { top: 56%; left: 36%; width: 51%; height: 13%; }
+        #spot-jinde   { top: 24%; left: 84%; width: 12%; height: 33%; }
+        #spot-field   { top: 28%; left: 48%; width: 37%; height: 28%; }
+        #spot-houzong { top: 25%; left: 10%; width: 6%; height: 35%; }
+
+        /* 彈出視窗 Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width:100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.65);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: rgb(255, 255, 255);
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 520px;
+            width: 92%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            animation: popup 0.25s ease;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes popup {
+            from { transform: scale(0.85); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 18px;
+            font-size: 26px;
+            font-weight: bold;
+            color: #888;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        /* 建築物介紹區塊 (置頂與中間) */
+        .info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            color: #000000;
+            font-size: 1.4rem;
+        }
+
+        .modal-body {
+            line-height: 1.6;
+            color: #444;
+            font-size: 0.95rem;
+        }
+
+        .tag {
+            display: inline-block;
+            align-self: flex-start;
+            background-color: #fef3e0;
+            color: #8a5a00;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        /* 最下方：5張圓形圖片 + 文字說明容器 */
+        .circle-gallery-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 6px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        /* 單個圖文組合項 */
+        .circle-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 18%; /* 5個剛好均分橫排 */
+            cursor: pointer;
+        }
+
+        /* 圓形圖片樣式 */
+        .circle-img {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid transparent;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            transition: all 0.2s ease;
+            background-color: #f0f0f0;
+        }
+
+        .circle-item:hover .circle-img {
+            transform: scale(1.08);
+        }
+
+        /* 被選中的圓形圖片高亮 */
+        .circle-item.active .circle-img {
+            border-color: #000000;
+            box-shadow: 0 0 8px rgba(0, 51, 102, 0);
+            transform: scale(1.08);
+        }
+
+        /* 圖片下方的文字說明 */
+        .circle-label {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: #666;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-all;
+        }
+
+        .circle-item.active .circle-label {
+            color: #000000;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 主地圖區 -->
+    <div class="map-wrapper">
+        <img src="campus-map.JPG" alt="校園手繪地圖" class="map-img">
+
+        <!-- 熱點（每一個地點都包含 5 張圓形圖片與對應說明文字） -->
+        <div class="hotspot" id="spot-zonghe" onclick="showInfo('綜合大樓', '禮堂/社辦/體育館', '這裡是各大社團活動與專科教室集中地，放學後超熱鬧！', [
+            {src: 'images/zonghe_litang.jpg', label: '禮堂'},
+            {src: 'images/zonghe_badminton.jpg', label: '羽球場'},
+            {src: 'images/zonghe_pingpong.jpg', label: '桌球場'},
+            {src: 'images/zonghe_sports.jpg', label: '體育組辦公室'},
+            {src: 'images/zonghe_gym.jpg', label: '無'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-science" onclick="showInfo('科學大樓', '實驗室大樓', '包含物理、化學、生物實驗室，上分科實驗課必去的場所。', [
+            {src: 'images/science_physics.jpg', label: '物理實驗室'},
+            {src: 'images/science_green.jpg', label: '綠苑講堂'},
+            {src: 'images/science_bio.jpg', label: '生物實驗室'},
+            {src: 'images/science_kbook.jpg', label: 'K書中心'},
+            {src: 'images/science_3d.jpg', label: '3D自造實驗室'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-pond" onclick="showInfo('魚池', '校貓基地 🐱', '生態豐富的小魚池，也是校貓下午最喜歡曬太陽擼貓的聖地！', [
+            {src: 'images/pond_fish.jpg', label: '錦鯉池'},
+            {src: 'images/pond_cat1.jpg', label: '校貓阿橘'},
+            {src: 'images/pond_cat2.jpg', label: '校貓花花'},
+            {src: 'images/pond_bridge.jpg', label: '九曲橋'},
+            {src: 'images/pond_rest.jpg', label: '涼亭'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-ziyuan" onclick="showInfo('資源大樓', '藝能科教室', '提供學生學習資源諮商、輔導與資訊課程地點。', [
+            {src: 'images/ziyuan_library.jpg', label: '圖書館'},
+            {src: 'images/ziyuan_computer.jpg', label: '電腦教室'},
+            {src: 'images/ziyuan_art.jpg', label: '美術教室'},
+            {src: 'images/ziyuan_music.jpg', label: '音樂教室'},
+            {src: 'images/ziyuan_health.jpg', label: '健康中心'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-zhengyi" onclick="showInfo('正誼樓', '班級主要教室', '主要教學大樓之一，是大家平時課堂學習的核心場所。', [
+            {src: 'images/zhengyi_admin.jpg', label: '學務處'},
+            {src: 'images/zhengyi_academic.jpg', label: '教務處'},
+            {src: 'images/zhengyi_general.jpg', label: '總務處'},
+            {src: 'images/zhengyi_counseling.jpg', label: '輔導室'},
+            {src: 'images/zhengyi_security.jpg', label: '校安中心'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-jinde" onclick="showInfo('進德樓', '教師辦公室/高三聚集地', '室內體育課、週會與大型全校集會活動的地點。', [
+            {src: 'images/jinde_canteen.jpg', label: '福利社'},
+            {src: 'images/jinde_office.jpg', label: '行政辦公室'},
+            {src: 'images/jinde_meeting.jpg', label: '會議室'},
+            {src: 'images/jinde_stage.jpg', label: '舞台區'},
+            {src: 'images/jinde_balcony.jpg', label: '看台區'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-field" onclick="showInfo('操場', '運動集會場地', '中午放學熱門聚會點，常有籃球與排球友誼賽！', [
+            {src: 'images/field_run.jpg', label: '跑道'},
+            {src: 'images/field_basket.jpg', label: '籃球場'},
+            {src: 'images/field_volley.jpg', label: '排球場'},
+            {src: 'images/field_stand.jpg', label: '司令台'},
+            {src: 'images/field_grass.jpg', label: '草坪區'}
+        ])"></div>
+
+        <div class="hotspot" id="spot-houzong" onclick="showInfo('後綜合大樓', '實驗室', '學校行政單位集中地，提供各項服務與支援。', [
+            {src: 'images/houzong_cook.jpg', label: '烹飪教室'},
+            {src: 'images/houzong_geology.jpg', label: '地科教室'},
+            {src: 'images/houzong_equipment.jpg', label: '設備組'},
+            {src: 'images/houzong_supplies.jpg', label: '器材室'},
+            {src: 'images/houzong_lab.jpg', label: '實驗室'}
+        ])"></div>
+    </div>
+
+    <!-- 彈出視窗 Modal -->
+    <div id="infoModal" class="modal" onclick="closeInfo(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close-btn" onclick="hideInfo()">×</span>
+
+            <!-- 最上方與中間：建築物介紹 -->
+            <div class="info-section">
+                <span id="modalTag" class="tag">區域介紹</span>
+                <h2 id="modalTitle" class="modal-title">地點名稱</h2>
+                <p id="modalBody" class="modal-body">詳細介紹內容...</p>
+            </div>
+
+            <!-- 最下方：5張圓形照片 + 文字說明橫排 -->
+            <div id="circleGallery" class="circle-gallery-container"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentPhotoList = [];
+        let activePhotoIndex = 0;
+
+        // 顯示彈出視窗
+        function showInfo(title, tag, body, photos = []) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalTag').innerText = tag;
+            document.getElementById('modalBody').innerText = body;
+
+            currentPhotoList = photos;
+            activePhotoIndex = 0;
+
+            renderCircleGallery();
+            document.getElementById('infoModal').style.display = 'flex';
+        }
+
+        // 動態生成最下方的圓形圖片與文字標籤
+        function renderCircleGallery() {
+            const gallery = document.getElementById('circleGallery');
+            gallery.innerHTML = '';
+
+            if (!currentPhotoList || currentPhotoList.length === 0) {
+                gallery.style.display = 'none';
+                return;
+            }
+
+            gallery.style.display = 'flex';
+
+            currentPhotoList.forEach((photo, index) => {
+                const item = document.createElement('div');
+                item.className = `circle-item ${index === activePhotoIndex ? 'active' : ''}`;
+                
+                // 點擊切換高亮外框
+                item.onclick = () => {
+                    activePhotoIndex = index;
+                    updateActiveCircle();
+                };
+
+                const img = document.createElement('img');
+                img.className = 'circle-img';
+                img.src = photo.src;
+                img.alt = photo.label || `照片 ${index + 1}`;
+
+                const label = document.createElement('span');
+                label.className = 'circle-label';
+                label.innerText = photo.label || `地點 ${index + 1}`;
+
+                item.appendChild(img);
+                item.appendChild(label);
+                gallery.appendChild(item);
+            });
+        }
+
+        // 更新點擊後的高亮樣式
+        function updateActiveCircle() {
+            const items = document.querySelectorAll('.circle-item');
+            items.forEach((item, index) => {
+                if (index === activePhotoIndex) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+
+        function hideInfo() {
+            document.getElementById('infoModal').style.display = 'none';
+        }
+
+        function closeInfo(event) {
+            if (event.target.id === 'infoModal') {
+                hideInfo();
+            }
+        }
+    </script>
+
+</body>
+</html>
